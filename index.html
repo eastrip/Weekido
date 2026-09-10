@@ -649,7 +649,7 @@
     <div style="padding:16px 20px 22px;">
       <div class="list-block">
         <h3>Exporter</h3>
-        <p style="font-size:.8rem; color:var(--ink-soft); margin:0 0 8px;">Copie ce texte et garde-le en lieu sûr, ou sauvegarde/partage-le en fichier .json.</p>
+        <p style="font-size:.8rem; color:var(--ink-soft); margin:0 0 8px;">Copie ce texte et garde-le en lieu sûr, ou sauvegarde-le en fichier .json.</p>
         <textarea id="backupExportArea" readonly rows="6" style="width:100%; font-family:monospace; font-size:.7rem; padding:10px; border-radius:10px; border:2px solid var(--line); resize:vertical; box-sizing:border-box;"></textarea>
         <div class="form-row" style="margin-top:8px;">
           <button class="primary-btn" id="backupCopyBtn" style="flex:1;">📋 Copier</button>
@@ -1502,9 +1502,6 @@
     const blob = new Blob([backupExportArea.value], { type: "application/json" });
     const file = new File([blob], backupFileName(), { type: "application/json" });
 
-    // Only the file, no title/text: passing a title was exactly what got saved as a
-    // broken .txt on some devices when the file itself silently failed to share.
-    // With nothing else to fall back to, that can no longer happen.
     if(navigator.canShare && navigator.canShare({ files: [file] })){
       try{
         await navigator.share({ files: [file] });
