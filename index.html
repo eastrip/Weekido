@@ -437,13 +437,6 @@
     padding:9px 16px; font-weight:700; font-size:.85rem;
   }
   .primary-btn.full{width:100%; margin-top:4px;}
-  .danger-zone{
-    margin-top:22px; padding-top:16px; border-top:2px dashed var(--coral);
-  }
-  .danger-zone button{
-    background:#fff; border:2px solid var(--coral); color:var(--coral-dark);
-    border-radius:10px; padding:8px 14px; font-weight:700; font-size:.82rem; width:100%;
-  }
   select.select-plain{
     padding:9px; border-radius:10px; border:2px solid var(--line); font-size:.85rem;
   }
@@ -600,9 +593,6 @@
       <div class="form-row">
         <select id="newRewardChild" class="select-plain" style="flex:1;"></select>
         <button class="icon-btn" id="addRewardBtn" style="background:var(--purple); color:#fff;">➕</button>
-      </div>
-      <div class="danger-zone">
-        <button id="resetAllBtn">🗑️ Réinitialiser toutes les données</button>
       </div>
     </div>
 
@@ -1174,14 +1164,19 @@
     const list = document.getElementById(containerId);
     list.innerHTML = "";
     arr.forEach(item=>{
-      const row = document.createElement("div");
-      row.className = "form-row";
-      row.innerHTML = `
-        <input type="text" value="${escapeAttr(item.label)}" data-label="${item.id}">
-        <input type="number" value="${item[pointsKey]}" step="5" data-points="${item.id}">
-        <button class="icon-btn danger" data-remove="${item.id}">🗑️</button>
+      const wrap = document.createElement("div");
+      wrap.style.border = "2px solid var(--line)";
+      wrap.style.borderRadius = "12px";
+      wrap.style.padding = "10px";
+      wrap.style.marginBottom = "8px";
+      wrap.innerHTML = `
+        <textarea data-label="${item.id}" rows="1" class="auto-textarea" style="width:100%; margin-bottom:8px; padding:9px 10px; border-radius:10px; border:2px solid var(--line); box-sizing:border-box; font-family:inherit; font-size:.88rem; resize:none; overflow:hidden;">${escapeHtml(item.label)}</textarea>
+        <div class="form-row">
+          <input type="number" value="${item[pointsKey]}" step="5" data-points="${item.id}">
+          <button class="icon-btn danger" data-remove="${item.id}" style="margin-left:auto;">🗑️</button>
+        </div>
       `;
-      list.appendChild(row);
+      list.appendChild(wrap);
     });
     list.querySelectorAll("[data-label]").forEach(inp=>{
       inp.addEventListener("change", ()=>{
@@ -1200,6 +1195,7 @@
         onRemove(btn.getAttribute("data-remove"));
       });
     });
+    wireAutoResize(list);
   }
 
   function renderTasksEditList(){
@@ -1207,12 +1203,17 @@
     list.innerHTML = "";
     state.tasks.forEach(item=>{
       const row = document.createElement("div");
-      row.className = "form-row";
+      row.style.border = "2px solid var(--line)";
+      row.style.borderRadius = "12px";
+      row.style.padding = "10px";
+      row.style.marginBottom = "8px";
       row.innerHTML = `
-        <input type="text" value="${escapeAttr(item.icon||'📝')}" maxlength="4" data-icon="${item.id}" style="flex:0 0 44px; width:44px; text-align:center; padding:9px 4px; border-radius:10px; border:2px solid var(--line); font-size:1.1rem;">
-        <input type="text" value="${escapeAttr(item.label)}" data-label="${item.id}">
-        <input type="number" value="${item.points}" step="5" data-points="${item.id}">
-        <button class="icon-btn danger" data-remove="${item.id}">🗑️</button>
+        <textarea data-label="${item.id}" rows="1" class="auto-textarea" style="width:100%; margin-bottom:8px; padding:9px 10px; border-radius:10px; border:2px solid var(--line); box-sizing:border-box; font-family:inherit; font-size:.88rem; resize:none; overflow:hidden;">${escapeHtml(item.label)}</textarea>
+        <div class="form-row">
+          <input type="text" value="${escapeAttr(item.icon||'📝')}" maxlength="4" data-icon="${item.id}" style="flex:0 0 44px; width:44px; text-align:center; padding:9px 4px; border-radius:10px; border:2px solid var(--line); font-size:1.1rem;">
+          <input type="number" value="${item.points}" step="5" data-points="${item.id}">
+          <button class="icon-btn danger" data-remove="${item.id}" style="margin-left:auto;">🗑️</button>
+        </div>
       `;
       list.appendChild(row);
     });
@@ -1240,6 +1241,7 @@
         saveData(); renderTasksEditList(); renderChildren();
       });
     });
+    wireAutoResize(list);
   }
 
   function renderSettingsTasks(){
@@ -1281,8 +1283,8 @@
     // populate the "target child" select used when adding a new reward
     const newRewardChildSelect = document.getElementById("newRewardChild");
     const prevValue = newRewardChildSelect.value;
-    newRewardChildSelect.innerHTML = `<option value="">🌍 Tous les enfants</option>` +
-      state.children.map(c=>`<option value="${c.id}">👤 ${escapeAttr(c.name)} seulement</option>`).join("");
+    newRewardChildSelect.innerHTML = `<option value="">Tous les enfants</option>` +
+      state.children.map(c=>`<option value="${c.id}">${escapeAttr(c.name)} seulement</option>`).join("");
     if([...newRewardChildSelect.options].some(o=>o.value===prevValue)) newRewardChildSelect.value = prevValue;
 
     const list = document.getElementById("rewardsEditList");
@@ -1294,15 +1296,15 @@
       wrap.style.padding = "10px";
       wrap.style.marginBottom = "8px";
 
-      const childOptions = `<option value="">🌍 Tous les enfants</option>` +
-        state.children.map(c=>`<option value="${c.id}" ${item.childId===c.id?'selected':''}>👤 ${escapeAttr(c.name)} seulement</option>`).join("");
+      const childOptions = `<option value="">Tous les enfants</option>` +
+        state.children.map(c=>`<option value="${c.id}" ${item.childId===c.id?'selected':''}>${escapeAttr(c.name)} seulement</option>`).join("");
 
       wrap.innerHTML = `
+        <textarea data-reward-label="${item.id}" rows="1" class="auto-textarea" style="width:100%; margin-bottom:8px; padding:9px 10px; border-radius:10px; border:2px solid var(--line); box-sizing:border-box; font-family:inherit; font-size:.88rem; resize:none; overflow:hidden;">${escapeHtml(item.label)}</textarea>
         <div class="form-row" style="margin-bottom:6px;">
           <input type="text" value="${escapeAttr(item.icon||'🎟️')}" maxlength="4" data-reward-icon="${item.id}" style="flex:0 0 44px; width:44px; text-align:center; padding:9px 4px; border-radius:10px; border:2px solid var(--line); font-size:1.1rem;">
-          <input type="text" value="${escapeAttr(item.label)}" data-reward-label="${item.id}">
           <input type="number" value="${item.threshold}" step="5" data-reward-points="${item.id}">
-          <button class="icon-btn danger" data-reward-remove="${item.id}">🗑️</button>
+          <button class="icon-btn danger" data-reward-remove="${item.id}" style="margin-left:auto;">🗑️</button>
         </div>
         <select class="select-plain" style="width:100%;" data-reward-child="${item.id}">${childOptions}</select>
       `;
@@ -1338,6 +1340,7 @@
         saveData(); renderSettingsRewards(); renderChildren();
       });
     });
+    wireAutoResize(list);
   }
   document.getElementById("addRewardBtn").addEventListener("click", ()=>{
     const iconInput = document.getElementById("newRewardIcon");
@@ -1391,21 +1394,6 @@
       btn.style.background = originalBg;
       btn.disabled = false;
     }, 1500);
-  });
-
-  document.getElementById("resetAllBtn").addEventListener("click", ()=>{
-    if(confirm("Cette action supprimera toutes les données (enfants, tâches, historique). Continuer ?")){
-      state = defaultData();
-      saveData();
-      renderSettingsChildren();
-      renderSettingsTasks();
-      renderSettingsBehaviors();
-      renderSettingsRewards();
-      renderSettingsWeek();
-      renderChildren();
-      renderHistory();
-      closeSettings();
-    }
   });
 
   /* ================= MODAL open/close + tabs ================= */
@@ -1758,6 +1746,8 @@
   function switchTab(tab){
     document.querySelectorAll(".tab-btn[data-tab]").forEach(b=>b.classList.toggle("active", b.getAttribute("data-tab")===tab));
     document.querySelectorAll("#settingsOverlay .tab-panel").forEach(p=>p.classList.toggle("active", p.getAttribute("data-tab")===tab));
+    const activePanel = document.querySelector(`#settingsOverlay .tab-panel[data-tab="${tab}"]`);
+    if(activePanel) wireAutoResize(activePanel);
   }
   document.querySelectorAll(".tab-btn[data-tab]").forEach(btn=>{
     btn.addEventListener("click", ()=>switchTab(btn.getAttribute("data-tab")));
@@ -1768,6 +1758,20 @@
     return String(str).replace(/[&<>"']/g, s=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[s]));
   }
   function escapeAttr(str){ return escapeHtml(str); }
+
+  function autoResizeTextarea(el){
+    el.style.height = "auto";
+    el.style.height = el.scrollHeight + "px";
+  }
+  function wireAutoResize(container){
+    container.querySelectorAll("textarea.auto-textarea").forEach(el=>{
+      autoResizeTextarea(el);
+      if(!el.dataset.autoresizeWired){
+        el.dataset.autoresizeWired = "1";
+        el.addEventListener("input", ()=>autoResizeTextarea(el));
+      }
+    });
+  }
 
   /* ================= init ================= */
   ensureCurrentWeek();
