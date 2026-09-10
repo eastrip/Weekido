@@ -1486,7 +1486,9 @@
   }
 
   function downloadBackupFile(){
-    const blob = new Blob([backupExportArea.value], { type: "application/json" });
+    // application/octet-stream forces a plain "save file" with the exact name/extension given,
+    // instead of letting the browser reinterpret application/json and save it as .txt
+    const blob = new Blob([backupExportArea.value], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
