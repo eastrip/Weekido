@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Weekido — Tableau des points</title>
+<title>WeeknDo — Tableau des points</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=Slackey&display=swap" rel="stylesheet">
@@ -68,6 +68,10 @@
     text-transform:uppercase;
   }
   .topbar h1 span{color:var(--gold-dark);}
+  .topbar h1 .logo-n{
+    font-size:.5em;
+    color:#E57241;
+  }
   .gear-btn, .history-btn{
     width:46px;height:46px;
     border-radius:50%;
@@ -440,6 +444,30 @@
   select.select-plain{
     padding:9px; border-radius:10px; border:2px solid var(--line); font-size:.85rem;
   }
+  .child-chips{
+    display:flex; flex-wrap:wrap; gap:6px;
+  }
+  .child-chip{
+    border:2px solid var(--line);
+    background:#F7F8FD;
+    color:var(--ink-soft);
+    border-radius:999px;
+    padding:6px 12px;
+    font-size:.78rem;
+    font-weight:700;
+  }
+  .child-chip.active{
+    border-color:var(--purple);
+    background:#FFE6F1;
+    color:var(--purple-dark);
+  }
+  .child-chip-none{
+    font-weight:400;
+    font-style:italic;
+    color:var(--ink-soft);
+    font-size:.78rem;
+    padding:6px 2px;
+  }
 
   /* ---------- Picker modal ---------- */
   .picker-search{
@@ -514,7 +542,7 @@
 <body>
 
 <div class="topbar">
-  <h1>Week<span>ido</span></h1>
+  <h1>Week<span class="logo-n">n</span><span>Do</span></h1>
   <div class="topbar-actions">
     <button class="history-btn" id="openHistory" title="Historique" aria-label="Historique">📅</button>
     <button class="history-btn" id="openBackup" title="Sauvegarde / Restauration" aria-label="Sauvegarde / Restauration">💾</button>
@@ -583,15 +611,12 @@
 
     <!-- Rewards tab -->
     <div class="tab-panel" data-tab="rewards">
-      <p style="font-size:.8rem; color:var(--ink-soft); margin-top:0;">Récompenses débloquées selon le score de la semaine. Choisis "Tous les enfants" ou un enfant en particulier.</p>
+      <p style="font-size:.8rem; color:var(--ink-soft); margin-top:0;">Récompenses débloquées selon le score de la semaine. Choisis "Tous", un ou plusieurs enfants, ou "Aucun" si elle n'est pas attribuée cette semaine.</p>
       <div id="rewardsEditList" class="list-block"></div>
       <div class="form-row">
         <input type="text" id="newRewardIcon" placeholder="🎟️" maxlength="4" style="flex:0 0 44px; width:44px; text-align:center; padding:9px 4px; border-radius:10px; border:2px solid var(--line); font-size:1.1rem;" value="🎟️">
         <input type="text" id="newRewardLabel" placeholder="Récompense (ex: Sortie au parc)">
         <input type="number" id="newRewardPoints" value="50" step="5">
-      </div>
-      <div class="form-row">
-        <select id="newRewardChild" class="select-plain" style="flex:1;"></select>
         <button class="icon-btn" id="addRewardBtn" style="background:var(--purple); color:#fff;">➕</button>
       </div>
     </div>
@@ -763,7 +788,7 @@
       children: [],
       tasks: DEFAULT_TASKS.map(([label,points,icon])=>({id:uid(), label, points, icon})),
       behaviors: DEFAULT_BEHAVIORS.map(([label,points])=>({id:uid(), label, points})),
-      rewards: DEFAULT_REWARDS.map(([label,threshold,icon])=>({id:uid(), label, threshold, childId:null, icon})),
+      rewards: DEFAULT_REWARDS.map(([label,threshold,icon])=>({id:uid(), label, threshold, childIds:null, icon})),
       weeks: {},
       weekSettings: { ...DEFAULT_WEEK_SETTINGS }
     };
@@ -792,9 +817,13 @@
     parsed.weekSettings = parsed.weekSettings || { ...DEFAULT_WEEK_SETTINGS };
     // migration: make sure every task has an icon
     parsed.tasks.forEach(t=>{ if(!t.icon) t.icon = "📝"; });
-    // migration: make sure every reward has a childId field (null = shared by all children) and an icon
+    // migration: every reward now uses childIds (null = all children, [] = none, [ids] = specific children)
     parsed.rewards.forEach(r=>{
-      if(r.childId === undefined) r.childId = null;
+      if(r.childIds === undefined){
+        // legacy single childId field
+        r.childIds = (r.childId === undefined || r.childId === null) ? null : [r.childId];
+      }
+      delete r.childId;
       if(!r.icon) r.icon = "🎟️";
     });
     return parsed;
@@ -905,7 +934,7 @@
 
   /* ================= RENDER: CHILDREN + GAUGES ================= */
   function rewardsForChild(childId){
-    return state.rewards.filter(r => !r.childId || r.childId === childId);
+    return state.rewards.filter(r => r.childIds === null || r.childIds === undefined || (Array.isArray(r.childIds) && r.childIds.includes(childId)));
   }
 
   function computeMaxScale(){
@@ -1128,8 +1157,10 @@
         const id = btn.getAttribute("data-child-remove");
         if(confirm("Supprimer cet enfant ? Tout son historique et ses données seront définitivement supprimés.")){
           state.children = state.children.filter(c=>c.id!==id);
-          // rewards that were assigned only to this child would otherwise become invisible orphans
-          state.rewards.forEach(r=>{ if(r.childId === id) r.childId = null; });
+          // remove this child from any reward's childIds list so it doesn't linger as a dangling id
+          state.rewards.forEach(r=>{
+            if(Array.isArray(r.childIds)) r.childIds = r.childIds.filter(cid=>cid!==id);
+          });
           // purge this child's entries from every stored week so their data doesn't linger
           Object.values(state.weeks).forEach(week=>{
             if(week.entries && week.entries[id]) delete week.entries[id];
@@ -1280,13 +1311,6 @@
   });
 
   function renderSettingsRewards(){
-    // populate the "target child" select used when adding a new reward
-    const newRewardChildSelect = document.getElementById("newRewardChild");
-    const prevValue = newRewardChildSelect.value;
-    newRewardChildSelect.innerHTML = `<option value="">Tous les enfants</option>` +
-      state.children.map(c=>`<option value="${c.id}">${escapeAttr(c.name)} seulement</option>`).join("");
-    if([...newRewardChildSelect.options].some(o=>o.value===prevValue)) newRewardChildSelect.value = prevValue;
-
     const list = document.getElementById("rewardsEditList");
     list.innerHTML = "";
     state.rewards.forEach(item=>{
@@ -1296,17 +1320,29 @@
       wrap.style.padding = "10px";
       wrap.style.marginBottom = "8px";
 
-      const childOptions = `<option value="">Tous les enfants</option>` +
-        state.children.map(c=>`<option value="${c.id}" ${item.childId===c.id?'selected':''}>${escapeAttr(c.name)} seulement</option>`).join("");
+      const isAll = item.childIds === null || item.childIds === undefined;
+      const selectedIds = Array.isArray(item.childIds) ? item.childIds : [];
+
+      let chipsHtml = `<button class="child-chip ${isAll ? 'active' : ''}" data-chip-all="${item.id}">Tous</button>`;
+      state.children.forEach(c=>{
+        const active = !isAll && selectedIds.includes(c.id);
+        chipsHtml += `<button class="child-chip ${active ? 'active' : ''}" data-chip-child="${item.id}" data-child-id="${c.id}"><span class="dot" style="background:${c.color}; display:inline-block; margin-right:5px; vertical-align:middle;"></span>${escapeAttr(c.name)}</button>`;
+      });
+      if(!isAll && selectedIds.length === 0 && state.children.length > 0){
+        chipsHtml += `<span class="child-chip-none">Aucun enfant (pas attribuée cette semaine)</span>`;
+      }
+      if(state.children.length === 0){
+        chipsHtml += `<span class="child-chip-none">Ajoute des enfants pour choisir à qui l'attribuer</span>`;
+      }
 
       wrap.innerHTML = `
         <textarea data-reward-label="${item.id}" rows="1" class="auto-textarea" style="width:100%; margin-bottom:8px; padding:9px 10px; border-radius:10px; border:2px solid var(--line); box-sizing:border-box; font-family:inherit; font-size:.88rem; resize:none; overflow:hidden;">${escapeHtml(item.label)}</textarea>
-        <div class="form-row" style="margin-bottom:6px;">
+        <div class="form-row" style="margin-bottom:8px;">
           <input type="text" value="${escapeAttr(item.icon||'🎟️')}" maxlength="4" data-reward-icon="${item.id}" style="flex:0 0 44px; width:44px; text-align:center; padding:9px 4px; border-radius:10px; border:2px solid var(--line); font-size:1.1rem;">
           <input type="number" value="${item.threshold}" step="5" data-reward-points="${item.id}">
           <button class="icon-btn danger" data-reward-remove="${item.id}" style="margin-left:auto;">🗑️</button>
         </div>
-        <select class="select-plain" style="width:100%;" data-reward-child="${item.id}">${childOptions}</select>
+        <div class="child-chips">${chipsHtml}</div>
       `;
       list.appendChild(wrap);
     });
@@ -1328,10 +1364,24 @@
         if(item){ item.threshold = parseInt(inp.value,10) || 0; saveData(); renderChildren(); }
       });
     });
-    list.querySelectorAll("[data-reward-child]").forEach(sel=>{
-      sel.addEventListener("change", ()=>{
-        const item = state.rewards.find(x=>x.id===sel.getAttribute("data-reward-child"));
-        if(item){ item.childId = sel.value || null; saveData(); renderChildren(); }
+    list.querySelectorAll("[data-chip-all]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const item = state.rewards.find(x=>x.id===btn.getAttribute("data-chip-all"));
+        if(item){ item.childIds = null; saveData(); renderSettingsRewards(); renderChildren(); }
+      });
+    });
+    list.querySelectorAll("[data-chip-child]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const item = state.rewards.find(x=>x.id===btn.getAttribute("data-chip-child"));
+        const childId = btn.getAttribute("data-child-id");
+        if(!item) return;
+        const current = Array.isArray(item.childIds) ? item.childIds.slice() : [];
+        const idx = current.indexOf(childId);
+        if(idx === -1) current.push(childId); else current.splice(idx,1);
+        item.childIds = current;
+        saveData();
+        renderSettingsRewards();
+        renderChildren();
       });
     });
     list.querySelectorAll("[data-reward-remove]").forEach(btn=>{
@@ -1346,10 +1396,9 @@
     const iconInput = document.getElementById("newRewardIcon");
     const labelInput = document.getElementById("newRewardLabel");
     const pointsInput = document.getElementById("newRewardPoints");
-    const childSelect = document.getElementById("newRewardChild");
     const label = labelInput.value.trim();
     if(!label) return;
-    state.rewards.push({ id: uid(), label, threshold: parseInt(pointsInput.value,10) || 50, childId: childSelect.value || null, icon: iconInput.value.trim() || "🎟️" });
+    state.rewards.push({ id: uid(), label, threshold: parseInt(pointsInput.value,10) || 50, childIds: null, icon: iconInput.value.trim() || "🎟️" });
     labelInput.value = "";
     iconInput.value = "🎟️";
     saveData();
@@ -1399,12 +1448,12 @@
   /* ================= MODAL open/close + tabs ================= */
   const overlay = document.getElementById("settingsOverlay");
   function openSettings(tab){
+    overlay.classList.add("open");
     renderSettingsChildren();
     renderSettingsTasks();
     renderSettingsBehaviors();
     renderSettingsRewards();
     renderSettingsWeek();
-    overlay.classList.add("open");
     if(tab) switchTab(tab);
   }
   function closeSettings(){ overlay.classList.remove("open"); }
@@ -1474,7 +1523,7 @@
   });
 
   function backupFileName(){
-    return "weekido-sauvegarde.json";
+    return "weekndo-sauvegarde.json";
   }
 
   function downloadBackupFile(){
@@ -1527,7 +1576,7 @@
     try{
       normalized = normalizeData(parsed);
     }catch(e){
-      alert("Ce fichier n'a pas le format attendu pour une sauvegarde Weekido.");
+      alert("Ce fichier n'a pas le format attendu pour une sauvegarde WeeknDo.");
       return;
     }
     if(!confirm("Ça va remplacer TOUTES les données actuelles (enfants, tâches, historique...) par cette sauvegarde. Continuer ?")) return;
