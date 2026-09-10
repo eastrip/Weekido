@@ -6,7 +6,7 @@
 <title>Weekido — Tableau des points</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=Slackey&display=swap" rel="stylesheet">
 <style>
   :root{
     --card: #FFFFFF;
@@ -60,9 +60,12 @@
   }
   .topbar-actions{display:flex; gap:10px; flex-shrink:0;}
   .topbar h1{
-    font-size:2.4rem;
+    font-family:'Slackey', 'Fredoka', sans-serif;
+    font-size:3.3rem;
+    font-weight:400;
     color:var(--purple-dark);
-    letter-spacing:.2px;
+    letter-spacing:.5px;
+    text-transform:uppercase;
   }
   .topbar h1 span{color:var(--gold-dark);}
   .gear-btn, .history-btn{
@@ -499,7 +502,7 @@
   }
 
   @media (max-width:480px){
-    .topbar h1{font-size:1.6rem;}
+    .topbar h1{font-size:2.4rem;}
     .topbar-actions{gap:6px;}
     .history-btn, .gear-btn{width:40px; height:40px; font-size:1.1rem;}
     .gauge{height:28px;}
@@ -518,7 +521,7 @@
 <body>
 
 <div class="topbar">
-  <h1>Week<span>ido</span> 🎟️</h1>
+  <h1>Week<span>ido</span></h1>
   <div class="topbar-actions">
     <button class="history-btn" id="openHistory" title="Historique" aria-label="Historique">📅</button>
     <button class="history-btn" id="openBackup" title="Sauvegarde / Restauration" aria-label="Sauvegarde / Restauration">💾</button>
