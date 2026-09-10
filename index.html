@@ -31,19 +31,10 @@
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;}
   body{
-    position:relative;
     font-family:'Nunito', sans-serif;
     color:var(--ink);
     min-height:100vh;
     padding-bottom:60px;
-  }
-  body::before{
-    content:"";
-    position:fixed;
-    inset:0;
-    width:100vw;
-    height:100vh;
-    z-index:-1;
     background:
       radial-gradient(circle at 100% 0%, #C9F7E3 0%, transparent 55%),
       radial-gradient(circle at 0% 15%, #FFE1F0 0%, transparent 50%),
