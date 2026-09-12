@@ -281,6 +281,50 @@
     font-family:'Fredoka', sans-serif;
   }
 
+  .special-banner{
+    margin-top:14px;
+    cursor:pointer;
+  }
+  .special-banner-top{
+    display:flex; align-items:center; gap:6px;
+    margin-bottom:6px;
+  }
+  .special-banner-icon{font-size:.95rem; flex-shrink:0;}
+  .special-banner-text{
+    flex:1;
+    font-weight:700;
+    font-size:.78rem;
+    color:var(--ink-soft);
+    overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .special-banner-tag{
+    flex-shrink:0;
+    font-size:.68rem;
+    font-weight:700;
+    color:var(--gold-dark);
+    font-family:'Fredoka', sans-serif;
+  }
+  .special-banner-bar{
+    width:100%; height:12px;
+    border-radius:999px;
+    border:2px solid var(--ink);
+    background:#F1F3FB;
+    overflow:hidden;
+  }
+  .special-banner-bar-fill{
+    height:100%;
+    background:linear-gradient(to right, var(--gold), var(--gold-dark));
+    border-radius:999px;
+    transition:width .4s cubic-bezier(.34,1.56,.64,1);
+  }
+  .special-banner-pts{
+    margin-top:4px;
+    font-size:.68rem;
+    font-weight:700;
+    color:var(--ink-soft);
+    text-align:right;
+  }
+
   .rewards-list{
     width:100%;
     display:flex; flex-direction:column; gap:10px;
@@ -317,6 +361,25 @@
     transition:width .4s cubic-bezier(.34,1.56,.64,1);
   }
   .reward-chip.unlocked .chip-bar-fill{background:var(--green-dark);}
+  .reward-chip.special{
+    border:2px dashed var(--gold-dark);
+    background:linear-gradient(135deg, #FFF6DA, #FFE6D9);
+  }
+  .reward-chip.special.unlocked{
+    border-style:solid;
+    background:linear-gradient(135deg, #FFEFA8, #FFD1C2);
+  }
+  .special-status{
+    display:inline-block;
+    font-size:.65rem;
+    font-weight:800;
+    padding:2px 8px;
+    border-radius:999px;
+    font-family:'Fredoka', sans-serif;
+  }
+  .special-status.upcoming{background:#E3E8F5; color:var(--ink-soft);}
+  .special-status.current{background:var(--gold-dark); color:#fff;}
+  .special-status.past{background:#F1F3FB; color:var(--ink-soft);}
 
   .add-btn{
     background:var(--purple);
@@ -612,7 +675,7 @@
 
     <!-- Rewards tab -->
     <div class="tab-panel" data-tab="rewards">
-      <p style="font-size:.8rem; color:var(--ink-soft); margin-top:0;">Récompenses débloquées selon le score de la semaine. Choisis "Tous", un ou plusieurs enfants, ou "Aucun" si elle n'est pas attribuée cette semaine.</p>
+      <p style="font-size:.8rem; color:var(--ink-soft); margin-top:0;">Récompenses hebdomadaires (basées sur le score de la semaine) ou exceptionnelles (avec des dates de début/fin, ex: sortie à Astérix). Choisis "Tous", un ou plusieurs enfants, ou "Aucun".</p>
       <div id="rewardsEditList" class="list-block"></div>
       <div class="form-row">
         <input type="text" id="newRewardIcon" placeholder="🎟️" maxlength="4" style="flex:0 0 44px; width:44px; text-align:center; padding:9px 4px; border-radius:10px; border:2px solid var(--line); font-size:1.1rem;" value="🎟️">
@@ -789,7 +852,7 @@
       children: [],
       tasks: DEFAULT_TASKS.map(([label,points,icon])=>({id:uid(), label, points, icon})),
       behaviors: DEFAULT_BEHAVIORS.map(([label,points])=>({id:uid(), label, points})),
-      rewards: DEFAULT_REWARDS.map(([label,threshold,icon])=>({id:uid(), label, threshold, childIds:null, icon})),
+      rewards: DEFAULT_REWARDS.map(([label,threshold,icon])=>({id:uid(), label, threshold, childIds:null, icon, kind:"weekly", startDate:null, endDate:null})),
       weeks: {},
       weekSettings: { ...DEFAULT_WEEK_SETTINGS }
     };
@@ -826,6 +889,9 @@
       }
       delete r.childId;
       if(!r.icon) r.icon = "🎟️";
+      if(r.kind !== "special") r.kind = "weekly";
+      if(r.startDate === undefined) r.startDate = null;
+      if(r.endDate === undefined) r.endDate = null;
     });
     return parsed;
   }
@@ -911,6 +977,11 @@
     const d = new Date(iso);
     return d.toLocaleDateString("fr-FR",{day:"2-digit",month:"2-digit"}) + " " + d.toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"});
   }
+  function fmtDateOnly(dateKey){
+    if(!dateKey) return "";
+    const d = keyToDate(dateKey);
+    return d.toLocaleDateString("fr-FR",{day:"numeric",month:"short",year:"numeric"});
+  }
 
   function ensureCurrentWeek(){
     const key = weekKeyOf(new Date());
@@ -933,13 +1004,46 @@
     return w.entries[childId].total;
   }
 
+  function getChildRangeTotal(childId, startDateStr, endDateStr){
+    if(!startDateStr || !endDateStr) return 0;
+    const start = keyToDate(startDateStr);
+    start.setHours(0,0,0,0);
+    const end = keyToDate(endDateStr);
+    end.setHours(23,59,59,999);
+    let sum = 0;
+    Object.values(state.weeks).forEach(week=>{
+      const entry = week.entries && week.entries[childId];
+      if(!entry || !entry.log) return;
+      entry.log.forEach(item=>{
+        const d = new Date(item.date);
+        if(d >= start && d <= end) sum += item.points;
+      });
+    });
+    return sum;
+  }
+
+  function rewardTotalForChild(reward, childId){
+    if(reward.kind === "special") return getChildRangeTotal(childId, reward.startDate, reward.endDate);
+    return getChildTotal(state.currentWeekKey, childId);
+  }
+
+  function specialRewardStatus(reward){
+    if(!reward.startDate || !reward.endDate) return "invalid";
+    const today = dateToKey(new Date());
+    if(today < reward.startDate) return "upcoming";
+    if(today > reward.endDate) return "past";
+    return "current";
+  }
+
   /* ================= RENDER: CHILDREN + GAUGES ================= */
   function rewardsForChild(childId){
     return state.rewards.filter(r => r.childIds === null || r.childIds === undefined || (Array.isArray(r.childIds) && r.childIds.includes(childId)));
   }
 
   function computeMaxScale(){
-    const rewardMax = state.rewards.reduce((m,r)=>Math.max(m,r.threshold),0);
+    // exceptional (date-range) rewards don't affect the weekly gauge's scale/marks —
+    // their threshold lives on a completely different, custom time-span
+    const rewardMax = state.rewards.filter(r=>r.kind!=="special").reduce((m,r)=>Math.max(m,r.threshold),0);
     const curKey = state.currentWeekKey;
     let scoreMax = 0;
     state.children.forEach(c=> scoreMax = Math.max(scoreMax, getChildTotal(curKey,c.id)));
@@ -999,16 +1103,37 @@
 
       const initials = child.name.trim().slice(0,1).toUpperCase() || "?";
       const childRewards = rewardsForChild(child.id);
-      const unlockedCount = childRewards.filter(r => total >= r.threshold).length;
+      const unlockedCount = childRewards.filter(r => rewardTotalForChild(r, child.id) >= r.threshold).length;
 
-      // reward marks html (vertical dashed lines on the horizontal gauge)
+      // reward marks html (vertical dashed lines on the horizontal gauge) — weekly rewards only,
+      // since an exceptional (date-range) reward's threshold lives on a different time-span
       let rewardMarksHtml = "";
       let rewardIconsHtml = "";
-      childRewards.slice().sort((a,b)=>a.threshold-b.threshold).forEach(r=>{
+      childRewards.filter(r=>r.kind!=="special").slice().sort((a,b)=>a.threshold-b.threshold).forEach(r=>{
         const posPct = Math.max(0, Math.min(100, ((r.threshold - minScale) / range) * 100));
         rewardMarksHtml += `<div class="gauge-reward-mark" style="left:${posPct}%;"></div>`;
         rewardIconsHtml += `<span class="gauge-reward-icon" style="left:${posPct}%;" title="${escapeAttr(r.label)} (${r.threshold}pt)">${escapeHtml(r.icon||'🎟️')}</span>`;
       });
+
+      // banner for any currently-active exceptional reward, so it stands out without opening the modal
+      const activeSpecial = childRewards.find(r=>r.kind==="special" && specialRewardStatus(r)==="current");
+      let specialBannerHtml = "";
+      if(activeSpecial){
+        const specialTotal = rewardTotalForChild(activeSpecial, child.id);
+        const specialPct = activeSpecial.threshold > 0 ? Math.max(0, Math.min(100, (specialTotal/activeSpecial.threshold)*100)) : 100;
+        const specialUnlocked = specialTotal >= activeSpecial.threshold;
+        specialBannerHtml = `
+        <div class="special-banner" data-rewards-for="${child.id}">
+          <div class="special-banner-top">
+            <span class="special-banner-icon">${escapeHtml(activeSpecial.icon||'🎉')}</span>
+            <span class="special-banner-text">${escapeHtml(activeSpecial.label)}</span>
+            <span class="special-banner-tag">${specialUnlocked ? '✓ Atteinte' : 'En cours'}</span>
+          </div>
+          <div class="special-banner-bar"><div class="special-banner-bar-fill" style="width:${specialPct}%;"></div></div>
+          <div class="special-banner-pts">${specialTotal} / ${activeSpecial.threshold} pts</div>
+        </div>
+      `;
+      }
 
       const activityCount = entry.log.length;
 
@@ -1035,6 +1160,7 @@
           </div>
           <button class="activity-icon-btn" data-activity-for="${child.id}" title="Activité récente">🕒${activityCount?`<span class="activity-badge">${activityCount}</span>`:''}</button>
         </div>
+        ${specialBannerHtml}
       `;
       grid.appendChild(card);
     });
@@ -1119,11 +1245,30 @@
       card.innerHTML = `
         <div class="week-card-header">
           <span class="range">${fmtRange(key)}</span>
-          ${isCurrent ? '<span class="tag">Semaine en cours</span>' : ''}
+          <div style="display:flex; align-items:center; gap:8px;">
+            ${isCurrent ? '<span class="tag">Semaine en cours</span>' : ''}
+            <button class="icon-btn danger" data-delete-week="${key}" title="Supprimer cette semaine">🗑️</button>
+          </div>
         </div>
         <div class="week-body">${rowsHtml}</div>
       `;
       container.appendChild(card);
+    });
+    container.querySelectorAll("[data-delete-week]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const key = btn.getAttribute("data-delete-week");
+        const label = fmtRange(key);
+        if(confirm(`Supprimer définitivement la semaine du ${label} ? Cette action est irréversible.`)){
+          delete state.weeks[key];
+          saveData();
+          if(key === state.currentWeekKey){
+            // recreate an empty current week immediately so the app stays in a valid state
+            ensureCurrentWeek();
+          }
+          renderHistory();
+          renderChildren();
+        }
+      });
     });
   }
 
@@ -1330,11 +1475,13 @@
         chipsHtml += `<button class="child-chip ${active ? 'active' : ''}" data-chip-child="${item.id}" data-child-id="${c.id}"><span class="dot" style="background:${c.color}; display:inline-block; margin-right:5px; vertical-align:middle;"></span>${escapeAttr(c.name)}</button>`;
       });
       if(!isAll && selectedIds.length === 0 && state.children.length > 0){
-        chipsHtml += `<span class="child-chip-none">Aucun enfant (pas attribuée cette semaine)</span>`;
+        chipsHtml += `<span class="child-chip-none">Aucun enfant (non attribuée)</span>`;
       }
       if(state.children.length === 0){
         chipsHtml += `<span class="child-chip-none">Ajoute des enfants pour choisir à qui l'attribuer</span>`;
       }
+
+      const isSpecial = item.kind === "special";
 
       wrap.innerHTML = `
         <textarea data-reward-label="${item.id}" rows="1" class="auto-textarea" style="width:100%; margin-bottom:8px; padding:9px 10px; border-radius:10px; border:2px solid var(--line); box-sizing:border-box; font-family:inherit; font-size:.88rem; resize:none; overflow:hidden;">${escapeHtml(item.label)}</textarea>
@@ -1343,9 +1490,37 @@
           <input type="number" value="${item.threshold}" step="5" data-reward-points="${item.id}">
           <button class="icon-btn danger" data-reward-remove="${item.id}" style="margin-left:auto;">🗑️</button>
         </div>
+        <div class="child-chips" style="margin-bottom:8px;">
+          <button class="child-chip ${!isSpecial ? 'active' : ''}" data-reward-kind="${item.id}" data-kind-value="weekly">📅 Hebdomadaire</button>
+          <button class="child-chip ${isSpecial ? 'active' : ''}" data-reward-kind="${item.id}" data-kind-value="special">🎉 Exceptionnelle</button>
+        </div>
+        ${isSpecial ? `
+        <div class="form-row" style="margin-bottom:8px;">
+          <input type="date" value="${item.startDate||''}" data-reward-start="${item.id}" style="flex:1; padding:9px 10px; border-radius:10px; border:2px solid var(--line); font-size:.85rem;">
+          <input type="date" value="${item.endDate||''}" data-reward-end="${item.id}" style="flex:1; padding:9px 10px; border-radius:10px; border:2px solid var(--line); font-size:.85rem;">
+        </div>
+        ` : ``}
         <div class="child-chips">${chipsHtml}</div>
       `;
       list.appendChild(wrap);
+    });
+    list.querySelectorAll("[data-reward-kind]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const item = state.rewards.find(x=>x.id===btn.getAttribute("data-reward-kind"));
+        if(item){ item.kind = btn.getAttribute("data-kind-value"); saveData(); renderSettingsRewards(); renderChildren(); }
+      });
+    });
+    list.querySelectorAll("[data-reward-start]").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const item = state.rewards.find(x=>x.id===inp.getAttribute("data-reward-start"));
+        if(item){ item.startDate = inp.value || null; saveData(); renderChildren(); }
+      });
+    });
+    list.querySelectorAll("[data-reward-end]").forEach(inp=>{
+      inp.addEventListener("change", ()=>{
+        const item = state.rewards.find(x=>x.id===inp.getAttribute("data-reward-end"));
+        if(item){ item.endDate = inp.value || null; saveData(); renderChildren(); }
+      });
     });
     list.querySelectorAll("[data-reward-icon]").forEach(inp=>{
       inp.addEventListener("change", ()=>{
@@ -1399,7 +1574,7 @@
     const pointsInput = document.getElementById("newRewardPoints");
     const label = labelInput.value.trim();
     if(!label) return;
-    state.rewards.push({ id: uid(), label, threshold: parseInt(pointsInput.value,10) || 50, childIds: null, icon: iconInput.value.trim() || "🎟️" });
+    state.rewards.push({ id: uid(), label, threshold: parseInt(pointsInput.value,10) || 50, childIds: null, icon: iconInput.value.trim() || "🎟️", kind:"weekly", startDate:null, endDate:null });
     labelInput.value = "";
     iconInput.value = "🎟️";
     saveData();
@@ -1766,15 +1941,17 @@
     const child = state.children.find(c=>c.id===rewardsTargetChild);
     if(!child) return;
     rewardsModalTitle.textContent = `🎟️ Récompenses — ${child.name}`;
-    const curKey = state.currentWeekKey;
-    const total = (state.weeks[curKey] && state.weeks[curKey].entries[child.id] && state.weeks[curKey].entries[child.id].total) || 0;
-    const sorted = rewardsForChild(child.id).slice().sort((a,b)=>a.threshold-b.threshold);
-    if(sorted.length === 0){
+    const all = rewardsForChild(child.id);
+    const weekly = all.filter(r=>r.kind!=="special").sort((a,b)=>a.threshold-b.threshold);
+    const special = all.filter(r=>r.kind==="special").sort((a,b)=>(a.startDate||"").localeCompare(b.startDate||""));
+    if(all.length === 0){
       rewardsModalList.innerHTML = `<div class="picker-empty">Aucune récompense configurée. Ajoutes-en dans Réglages > Récompenses.</div>`;
       return;
     }
     rewardsModalList.innerHTML = "";
-    sorted.forEach(r=>{
+
+    function buildWeeklyChip(r){
+      const total = rewardTotalForChild(r, child.id);
       const unlocked = total >= r.threshold;
       const pct = r.threshold > 0 ? Math.max(0, Math.min(100, (total/r.threshold)*100)) : 100;
       const chip = document.createElement("div");
@@ -1786,8 +1963,46 @@
         </div>
         <div class="chip-bar"><div class="chip-bar-fill" style="width:${pct}%;"></div></div>
       `;
-      rewardsModalList.appendChild(chip);
-    });
+      return chip;
+    }
+
+    function buildSpecialChip(r){
+      const total = rewardTotalForChild(r, child.id);
+      const unlocked = total >= r.threshold;
+      const pct = r.threshold > 0 ? Math.max(0, Math.min(100, (total/r.threshold)*100)) : 100;
+      const status = specialRewardStatus(r);
+      const statusLabel = status === "upcoming" ? "À venir" : status === "past" ? "Terminée" : status === "current" ? "En cours" : "";
+      const dateRange = (r.startDate && r.endDate) ? `${fmtDateOnly(r.startDate)} → ${fmtDateOnly(r.endDate)}` : "Dates non définies";
+      const chip = document.createElement("div");
+      chip.className = "reward-chip special" + (unlocked ? " unlocked" : "");
+      chip.innerHTML = `
+        <div class="reward-chip-top">
+          <span>${escapeHtml(r.icon||'🎉')} ${unlocked?'<span class="tick">✓</span> ':''}${escapeHtml(r.label)}</span>
+          <span class="chip-progress">${r.threshold}pt${unlocked?'':' (encore '+(r.threshold-total)+')'}</span>
+        </div>
+        <div class="chip-bar"><div class="chip-bar-fill" style="width:${pct}%;"></div></div>
+        <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center;">
+          <span style="font-size:.72rem; color:var(--ink-soft);">${dateRange}</span>
+          ${statusLabel ? `<span class="special-status ${status}">${statusLabel}</span>` : ''}
+        </div>
+      `;
+      return chip;
+    }
+
+    if(weekly.length){
+      const h = document.createElement("div");
+      h.style.cssText = "font-size:.75rem; font-weight:800; color:var(--ink-soft); margin-bottom:2px;";
+      h.textContent = "📅 Cette semaine";
+      rewardsModalList.appendChild(h);
+      weekly.forEach(r=>rewardsModalList.appendChild(buildWeeklyChip(r)));
+    }
+    if(special.length){
+      const h = document.createElement("div");
+      h.style.cssText = "font-size:.75rem; font-weight:800; color:var(--ink-soft); margin-top:14px; margin-bottom:2px;";
+      h.textContent = "🎉 Récompenses exceptionnelles";
+      rewardsModalList.appendChild(h);
+      special.forEach(r=>rewardsModalList.appendChild(buildSpecialChip(r)));
+    }
   }
 
   document.getElementById("closeRewards").addEventListener("click", closeRewards);
