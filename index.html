@@ -6,7 +6,7 @@
 <title>WeeknDo — Tableau des points</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=Slackey&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=Cherry+Bomb+One&display=swap" rel="stylesheet">
 <style>
   :root{
     --card: #FFFFFF;
@@ -60,18 +60,19 @@
   }
   .topbar-actions{display:flex; gap:10px; flex-shrink:0;}
   .topbar h1{
-    font-family:'Slackey', 'Fredoka', sans-serif;
+    font-family:'Cherry Bomb One', 'Fredoka', sans-serif;
     font-size:3.3rem;
     font-weight:400;
     color:var(--purple-dark);
     letter-spacing:.5px;
     text-transform:uppercase;
+    -webkit-text-stroke:6px var(--ink);
+    paint-order:stroke fill;
   }
   .topbar h1 span{color:var(--gold-dark);}
   .topbar h1 .logo-n{
-    font-size:.5em;
+    font-size:.75em;
     color:#E57241;
-    margin-left:.15em;
   }
   .gear-btn, .history-btn{
     width:46px;height:46px;
@@ -317,12 +318,24 @@
     border-radius:999px;
     transition:width .4s cubic-bezier(.34,1.56,.64,1);
   }
-  .special-banner-pts{
+  .special-banner-bottom{
+    display:flex; justify-content:space-between; align-items:center;
+    gap:8px;
     margin-top:4px;
+  }
+  .special-banner-dates{
+    font-size:.65rem;
+    font-weight:700;
+    color:var(--ink-soft);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .special-banner-pts{
     font-size:.68rem;
     font-weight:700;
     color:var(--ink-soft);
-    text-align:right;
+    flex-shrink:0;
   }
 
   .rewards-list{
@@ -1115,14 +1128,14 @@
         rewardIconsHtml += `<span class="gauge-reward-icon" style="left:${posPct}%;" title="${escapeAttr(r.label)} (${r.threshold}pt)">${escapeHtml(r.icon||'🎟️')}</span>`;
       });
 
-      // banner for any currently-active exceptional reward, so it stands out without opening the modal
-      const activeSpecial = childRewards.find(r=>r.kind==="special" && specialRewardStatus(r)==="current");
+      // banners for every currently-active exceptional reward, so none stay hidden if several overlap
+      const activeSpecials = childRewards.filter(r=>r.kind==="special" && specialRewardStatus(r)==="current");
       let specialBannerHtml = "";
-      if(activeSpecial){
+      activeSpecials.forEach(activeSpecial=>{
         const specialTotal = rewardTotalForChild(activeSpecial, child.id);
         const specialPct = activeSpecial.threshold > 0 ? Math.max(0, Math.min(100, (specialTotal/activeSpecial.threshold)*100)) : 100;
         const specialUnlocked = specialTotal >= activeSpecial.threshold;
-        specialBannerHtml = `
+        specialBannerHtml += `
         <div class="special-banner" data-rewards-for="${child.id}">
           <div class="special-banner-top">
             <span class="special-banner-icon">${escapeHtml(activeSpecial.icon||'🎉')}</span>
@@ -1130,10 +1143,13 @@
             <span class="special-banner-tag">${specialUnlocked ? '✓ Atteinte' : 'En cours'}</span>
           </div>
           <div class="special-banner-bar"><div class="special-banner-bar-fill" style="width:${specialPct}%;"></div></div>
-          <div class="special-banner-pts">${specialTotal} / ${activeSpecial.threshold} pts</div>
+          <div class="special-banner-bottom">
+            <span class="special-banner-dates">${fmtDateOnly(activeSpecial.startDate)} → ${fmtDateOnly(activeSpecial.endDate)}</span>
+            <span class="special-banner-pts">${specialTotal} / ${activeSpecial.threshold} pts</span>
+          </div>
         </div>
       `;
-      }
+      });
 
       const activityCount = entry.log.length;
 
@@ -1495,10 +1511,11 @@
           <button class="child-chip ${isSpecial ? 'active' : ''}" data-reward-kind="${item.id}" data-kind-value="special">🎉 Exceptionnelle</button>
         </div>
         ${isSpecial ? `
-        <div class="form-row" style="margin-bottom:8px;">
-          <input type="date" value="${item.startDate||''}" data-reward-start="${item.id}" style="flex:1; padding:9px 10px; border-radius:10px; border:2px solid var(--line); font-size:.85rem;">
-          <input type="date" value="${item.endDate||''}" data-reward-end="${item.id}" style="flex:1; padding:9px 10px; border-radius:10px; border:2px solid var(--line); font-size:.85rem;">
+        <div class="form-row" style="margin-bottom:4px;">
+          <input type="date" value="${item.startDate||''}" data-reward-start="${item.id}" style="flex:1; padding:9px 10px; border-radius:10px; border:2px solid ${item.startDate ? 'var(--line)' : 'var(--coral)'}; font-size:.85rem;">
+          <input type="date" value="${item.endDate||''}" data-reward-end="${item.id}" style="flex:1; padding:9px 10px; border-radius:10px; border:2px solid ${item.endDate ? 'var(--line)' : 'var(--coral)'}; font-size:.85rem;">
         </div>
+        ${(!item.startDate || !item.endDate) ? `<div style="font-size:.72rem; color:var(--coral-dark); font-weight:700; margin-bottom:8px;">⚠️ Ajoute une date de début et de fin, sinon cette récompense ne comptera aucun point.</div>` : ``}
         ` : ``}
         <div class="child-chips">${chipsHtml}</div>
       `;
@@ -1507,7 +1524,16 @@
     list.querySelectorAll("[data-reward-kind]").forEach(btn=>{
       btn.addEventListener("click", ()=>{
         const item = state.rewards.find(x=>x.id===btn.getAttribute("data-reward-kind"));
-        if(item){ item.kind = btn.getAttribute("data-kind-value"); saveData(); renderSettingsRewards(); renderChildren(); }
+        if(!item) return;
+        item.kind = btn.getAttribute("data-kind-value");
+        if(item.kind === "special" && !item.startDate && !item.endDate){
+          const today = new Date();
+          const inAWeek = new Date();
+          inAWeek.setDate(inAWeek.getDate() + 7);
+          item.startDate = dateToKey(today);
+          item.endDate = dateToKey(inAWeek);
+        }
+        saveData(); renderSettingsRewards(); renderChildren();
       });
     });
     list.querySelectorAll("[data-reward-start]").forEach(inp=>{
